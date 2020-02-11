@@ -75,10 +75,15 @@ type unlocked struct {
 	abort chan struct{}
 }
 
-// NewKeyStore creates a keystore for the given directory.
+// NewKeyStore creates a keystore for the given directory with default AES algorithm.
 func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
+	return NewKeyStoreWithCipher(keydir, scryptN, scryptP, Aes128())
+}
+
+// NewKeyStoreWithCipher creates a keystore for the given directory with given AES algorithm.
+func NewKeyStoreWithCipher(keydir string, scryptN, scryptP int, algorithm AesAlgorithm) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)
-	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP, false}}
+	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP, algorithm, false}}
 	ks.init(keydir)
 	return ks
 }
@@ -376,6 +381,10 @@ func (ks *KeyStore) Find(a accounts.Account) (accounts.Account, error) {
 	return a, err
 }
 
+func (ks *KeyStore) GetDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
+	return ks.getDecryptedKey(a, auth)
+}
+
 func (ks *KeyStore) getDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
 	a, err := ks.Find(a)
 	if err != nil {
@@ -426,12 +435,15 @@ func (ks *KeyStore) Export(a accounts.Account, passphrase, newPassphrase string)
 		return nil, err
 	}
 	var N, P int
+	var C AesAlgorithm
 	if store, ok := ks.storage.(*keyStorePassphrase); ok {
 		N, P = store.scryptN, store.scryptP
+		C = store.algorithm
 	} else {
 		N, P = StandardScryptN, StandardScryptP
+		C = Aes128()
 	}
-	return EncryptKey(key, newPassphrase, N, P)
+	return EncryptKey(key, newPassphrase, N, P, C)
 }
 
 // Import stores the given encrypted JSON key into the key directory.

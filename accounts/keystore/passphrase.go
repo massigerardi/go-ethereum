@@ -32,6 +32,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -68,12 +69,49 @@ const (
 
 	scryptR     = 8
 	scryptDKLen = 32
+
+	aes128Label = "aes-128-ctr"
+	aes192Label = "aes-192-ctr"
+	aes256Label = "aes-256-ctr"
 )
+
+type AesAlgorithm struct {
+	name      string
+	keyLength int
+}
+
+func getAesAlgorithm(name string) (AesAlgorithm, error) {
+	switch name {
+	case aes128Label:
+		return Aes128(), nil
+	case aes192Label:
+		return Aes192(), nil
+	case aes256Label:
+		return Aes256(), nil
+	}
+	return AesAlgorithm{}, errors.New("unrecognised algorithm")
+}
+
+// Aes128 aes algorithm
+func Aes128() AesAlgorithm {
+	return AesAlgorithm{aes128Label, 16}
+}
+
+// Aes192 aes algorithm
+func Aes192() AesAlgorithm {
+	return AesAlgorithm{aes192Label, 24}
+}
+
+// Aes256 aes algorithm
+func Aes256() AesAlgorithm {
+	return AesAlgorithm{aes256Label, 32}
+}
 
 type keyStorePassphrase struct {
 	keysDirPath string
 	scryptN     int
 	scryptP     int
+	algorithm   AesAlgorithm
 	// skipKeyFileVerification disables the security-feature which does
 	// reads and decrypts any newly created keyfiles. This should be 'false' in all
 	// cases except tests -- setting this to 'true' is not recommended.
@@ -98,13 +136,13 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 }
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
-func StoreKey(dir, auth string, scryptN, scryptP int) (accounts.Account, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
+func StoreKey(dir, auth string, scryptN, scryptP int, algorithm AesAlgorithm) (accounts.Account, error) {
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, algorithm, false}, rand.Reader, auth)
 	return a, err
 }
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
-	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
+	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP, ks.algorithm)
 	if err != nil {
 		return err
 	}
@@ -137,8 +175,8 @@ func (ks keyStorePassphrase) JoinPath(filename string) string {
 	return filepath.Join(ks.keysDirPath, filename)
 }
 
-// Encryptdata encrypts the data given as 'data' with the password 'auth'.
-func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) {
+// EncryptDataV3 encrypts the data given as 'data' with the password 'auth'.
+func EncryptDataV3(data, auth []byte, scryptN, scryptP int, algorithm AesAlgorithm) (CryptoJSON, error) {
 
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
@@ -148,7 +186,7 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 	if err != nil {
 		return CryptoJSON{}, err
 	}
-	encryptKey := derivedKey[:16]
+	encryptKey := derivedKey[:algorithm.keyLength]
 
 	iv := make([]byte, aes.BlockSize) // 16
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -171,7 +209,7 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 	}
 
 	cryptoStruct := CryptoJSON{
-		Cipher:       "aes-128-ctr",
+		Cipher:       algorithm.name,
 		CipherText:   hex.EncodeToString(cipherText),
 		CipherParams: cipherParamsJSON,
 		KDF:          keyHeaderKDF,
@@ -183,9 +221,9 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
 // blob that can be decrypted later on.
-func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
+func EncryptKey(key *Key, auth string, scryptN, scryptP int, algorithm AesAlgorithm) ([]byte, error) {
 	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
-	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP)
+	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP, algorithm)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +275,11 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 }
 
 func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
-	if cryptoJson.Cipher != "aes-128-ctr" {
-		return nil, fmt.Errorf("cipher not supported: %v", cryptoJson.Cipher)
+	algorithm, err := getAesAlgorithm(cryptoJson.Cipher)
+	if err != nil {
+		return nil, err
 	}
+
 	mac, err := hex.DecodeString(cryptoJson.MAC)
 	if err != nil {
 		return nil, err
@@ -265,7 +305,7 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 		return nil, ErrDecrypt
 	}
 
-	plainText, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
+	plainText, err := aesCTRXOR(derivedKey[:algorithm.keyLength], cipherText, iv)
 	if err != nil {
 		return nil, err
 	}
