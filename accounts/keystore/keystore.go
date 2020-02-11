@@ -81,7 +81,7 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 }
 
 // NewKeyStoreWithCipher creates a keystore for the given directory with given AES algorithm.
-func NewKeyStoreWithCipher(keydir string, scryptN, scryptP int, algorithm AesAlgorithm) *KeyStore {
+func NewKeyStoreWithCipher(keydir string, scryptN, scryptP int, algorithm aesAlgorithm) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)
 	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP, algorithm, false}}
 	ks.init(keydir)
@@ -381,10 +381,6 @@ func (ks *KeyStore) Find(a accounts.Account) (accounts.Account, error) {
 	return a, err
 }
 
-func (ks *KeyStore) GetDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
-	return ks.getDecryptedKey(a, auth)
-}
-
 func (ks *KeyStore) getDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
 	a, err := ks.Find(a)
 	if err != nil {
@@ -435,7 +431,7 @@ func (ks *KeyStore) Export(a accounts.Account, passphrase, newPassphrase string)
 		return nil, err
 	}
 	var N, P int
-	var C AesAlgorithm
+	var C aesAlgorithm
 	if store, ok := ks.storage.(*keyStorePassphrase); ok {
 		N, P = store.scryptN, store.scryptP
 		C = store.algorithm

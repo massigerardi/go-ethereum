@@ -75,12 +75,12 @@ const (
 	aes256Label = "aes-256-ctr"
 )
 
-type AesAlgorithm struct {
+type aesAlgorithm struct {
 	name      string
 	keyLength int
 }
 
-func getAesAlgorithm(name string) (AesAlgorithm, error) {
+func getAesAlgorithm(name string) (aesAlgorithm, error) {
 	switch name {
 	case aes128Label:
 		return Aes128(), nil
@@ -89,29 +89,29 @@ func getAesAlgorithm(name string) (AesAlgorithm, error) {
 	case aes256Label:
 		return Aes256(), nil
 	}
-	return AesAlgorithm{}, errors.New("unrecognised algorithm")
+	return aesAlgorithm{}, errors.New("unrecognised algorithm")
 }
 
 // Aes128 aes algorithm
-func Aes128() AesAlgorithm {
-	return AesAlgorithm{aes128Label, 16}
+func Aes128() aesAlgorithm {
+	return aesAlgorithm{aes128Label, 16}
 }
 
 // Aes192 aes algorithm
-func Aes192() AesAlgorithm {
-	return AesAlgorithm{aes192Label, 24}
+func Aes192() aesAlgorithm {
+	return aesAlgorithm{aes192Label, 24}
 }
 
 // Aes256 aes algorithm
-func Aes256() AesAlgorithm {
-	return AesAlgorithm{aes256Label, 32}
+func Aes256() aesAlgorithm {
+	return aesAlgorithm{aes256Label, 32}
 }
 
 type keyStorePassphrase struct {
 	keysDirPath string
 	scryptN     int
 	scryptP     int
-	algorithm   AesAlgorithm
+	algorithm   aesAlgorithm
 	// skipKeyFileVerification disables the security-feature which does
 	// reads and decrypts any newly created keyfiles. This should be 'false' in all
 	// cases except tests -- setting this to 'true' is not recommended.
@@ -136,7 +136,7 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 }
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
-func StoreKey(dir, auth string, scryptN, scryptP int, algorithm AesAlgorithm) (accounts.Account, error) {
+func StoreKey(dir, auth string, scryptN, scryptP int, algorithm aesAlgorithm) (accounts.Account, error) {
 	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, algorithm, false}, rand.Reader, auth)
 	return a, err
 }
@@ -176,7 +176,7 @@ func (ks keyStorePassphrase) JoinPath(filename string) string {
 }
 
 // EncryptDataV3 encrypts the data given as 'data' with the password 'auth'.
-func EncryptDataV3(data, auth []byte, scryptN, scryptP int, algorithm AesAlgorithm) (CryptoJSON, error) {
+func EncryptDataV3(data, auth []byte, scryptN, scryptP int, algorithm aesAlgorithm) (CryptoJSON, error) {
 
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
@@ -221,7 +221,7 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int, algorithm AesAlgorit
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
 // blob that can be decrypted later on.
-func EncryptKey(key *Key, auth string, scryptN, scryptP int, algorithm AesAlgorithm) ([]byte, error) {
+func EncryptKey(key *Key, auth string, scryptN, scryptP int, algorithm aesAlgorithm) ([]byte, error) {
 	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
 	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP, algorithm)
 	if err != nil {
