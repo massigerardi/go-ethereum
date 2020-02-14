@@ -83,7 +83,7 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 // NewKeyStoreWithCipher creates a keystore for the given directory with given AES algorithm.
 func NewKeyStoreWithCipher(keydir string, scryptN, scryptP int, algorithm aesAlgorithm) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)
-	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP, algorithm, false}}
+	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP, algorithm, true}}
 	ks.init(keydir)
 	return ks
 }
