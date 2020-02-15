@@ -99,7 +99,6 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 }
 
 func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
-	// AES-128 is selected due to size of encryptKey.
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
